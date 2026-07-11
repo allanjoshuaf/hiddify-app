@@ -1,10 +1,13 @@
 import 'package:dartx/dartx.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:gap/gap.dart';
 import 'package:hiddify/core/app_info/app_info_provider.dart';
 import 'package:hiddify/core/localization/translations.dart';
 import 'package:hiddify/core/router/bottom_sheets/bottom_sheets_notifier.dart';
 import 'package:hiddify/features/home/widget/connection_button.dart';
+import 'package:hiddify/features/home/widget/third_party_warning_banner.dart';
+import 'package:hiddify/features/profile/data/profile_data_providers.dart';
 import 'package:hiddify/features/profile/notifier/active_profile_notifier.dart';
 import 'package:hiddify/features/profile/widget/profile_tile.dart';
 import 'package:hiddify/features/proxy/active/active_proxy_card.dart';
@@ -12,6 +15,12 @@ import 'package:hiddify/features/proxy/active/active_proxy_delay_indicator.dart'
 import 'package:hiddify/gen/assets.gen.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:sliver_tools/sliver_tools.dart';
+
+// URL de la subscription auto-générée par gfp-fetcher (voir le repo
+// gfp-subscription). Remplace par ta vraie URL une fois GIT_REPO_DIR en
+// place et le premier push effectué.
+const String kDefaultFreeProxySubscriptionUrl =
+    'https://raw.githubusercontent.com/allanjoshuaf/gfp-subscription/main/subscription.txt';
 
 class HomePage extends HookConsumerWidget {
   const HomePage({super.key});
@@ -22,6 +31,22 @@ class HomePage extends HookConsumerWidget {
     final t = ref.watch(translationsProvider).requireValue;
     // final hasAnyProfile = ref.watch(hasAnyProfileProvider);
     final activeProfile = ref.watch(activeProfileProvider);
+    final hasAnyProfile = ref.watch(hasAnyProfileProvider);
+
+    // Premier lancement (aucun profil) : on ajoute automatiquement notre
+    // subscription par défaut, pour que l'utilisateur n'ait rien à coller
+    // manuellement. Ne s'exécute qu'une fois grâce à la dep sur la valeur
+    // "hasAnyProfile == false"; dès qu'un profil existe, ce useEffect ne
+    // se redéclenche plus jamais (pas de boucle, pas de doublon).
+    useEffect(() {
+      final noProfileYet = hasAnyProfile.value == false;
+      if (noProfileYet) {
+        ref.read(profileRepositoryProvider.future).then((repo) {
+          repo.upsertRemote(kDefaultFreeProxySubscriptionUrl).run();
+        });
+      }
+      return null;
+    }, [hasAnyProfile.value]);
 
     return Scaffold(
       appBar: AppBar(
@@ -61,15 +86,6 @@ class HomePage extends HookConsumerWidget {
           //           tooltip: t.profile.add.buttonText,
           //         )),
           Semantics(
-            key: const ValueKey("profile_quick_settings"),
-            label: t.pages.home.quickSettings,
-            child: IconButton(
-              icon: Icon(Icons.tune_rounded, color: theme.colorScheme.primary),
-              onPressed: () => ref.read(bottomSheetsNotifierProvider.notifier).showQuickSettings(),
-            ),
-          ),
-          const Gap(8),
-          Semantics(
             key: const ValueKey("profile_add_button"),
             label: t.pages.profiles.add,
             child: IconButton(
@@ -80,7 +96,11 @@ class HomePage extends HookConsumerWidget {
           const Gap(8),
         ],
       ),
-      body: Container(
+      body: Column(
+        children: [
+          const ThirdPartyWarningBanner(),
+          Expanded(
+            child: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
             image: const AssetImage('assets/images/world_map.png'), // Replace with your image path
@@ -131,6 +151,7 @@ class HomePage extends HookConsumerWidget {
                                 ),
                               ),
                               ActiveProxyFooter(),
+                              Gap(32),
                             ],
                           ),
                         ),
@@ -147,8 +168,48 @@ class HomePage extends HookConsumerWidget {
                 ),
               ),
             ),
+            if (ref.watch(hasAnyProfileProvider).value ?? false)
+              Positioned(
+                right: 0,
+                left: 0,
+                bottom: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Material(
+                      color: theme.colorScheme.primaryContainer,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                      ),
+                      child: InkWell(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                        ),
+                        onTap: () => ref.read(bottomSheetsNotifierProvider.notifier).showQuickSettings(),
+                        child: Container(
+                          height: 32,
+                          padding: const EdgeInsetsDirectional.only(start: 16, end: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(t.pages.home.quickSettings),
+                              const Gap(4),
+                              const Icon(Icons.arrow_drop_up_rounded, size: 16),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
+            ),
+          ),
+        ],
       ),
     );
   }
