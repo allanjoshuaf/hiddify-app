@@ -47,7 +47,7 @@ class HomePage extends HookConsumerWidget {
       }
       return null;
     }, [hasAnyProfile.value]);
-
+ 
     return Scaffold(
       appBar: AppBar(
         // leading: (RootScaffold.stateKey.currentState?.hasDrawer ?? false) && showDrawerButton(context)
